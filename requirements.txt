@@ -1,4 +1,4 @@
-bzip2==1.0.8
+
 ca-certificates==2025.1.31
 libffi==3.4.6
 liblzma==5.6.4

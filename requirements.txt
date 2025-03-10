@@ -17,6 +17,7 @@ numpy==1.26.4
 pandas
 scipy
 scikit-learn
+sqlite3>=3.35.0
 tqdm
 langchain
 langchain-community

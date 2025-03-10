@@ -13,7 +13,7 @@ ipython==8.12.2
 jupyter
 jupyterlab==4.3.0
 jupyterlab_server==2.27.3
-numpy
+numpy==1.26.4
 pandas
 scipy
 scikit-learn

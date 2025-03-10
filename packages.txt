@@ -1,6 +1,6 @@
 sqlite3
 libsqlite3-dev
-pysqlite3
+
 
 liblzma-dev
 libsqlite3-dev

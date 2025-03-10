@@ -57,11 +57,12 @@ def fetch_news_articles(query, limit=5):
         st.error(f"Error fetching news data: {e}")
         return []
 
-@st.cache_resource
+# @st.cache_resource removed to ensure no issues with resources
 def load_chroma_and_embeddings(persist_directory="chroma_store", model_name="sentence-transformers/all-MiniLM-L6-v2"):
     embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"})
     vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
     return vectorstore, embeddings
+
 
 @st.cache_resource
 def load_llm(model_name="meta-llama/Llama-3.2-1B-Instruct"):

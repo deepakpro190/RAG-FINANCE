@@ -2,7 +2,23 @@ name: finance
 channels:
   - conda-forge
   - defaults
-dependencies:
+dependencies: 
+   - pip:
+      - langchain
+      - openai
+      - transformers
+      - torch
+      - sentence-transformers
+      - faiss-cpu
+      - chromadb
+      - tiktoken
+      - pandas
+      - numpy
+      - scipy
+      - scikit-learn
+      - jupyter
+      - tqdm
+
   - anyio=4.5.0=pyhd8ed1ab_0
   - argon2-cffi=23.1.0=pyhd8ed1ab_0
   - argon2-cffi-bindings=21.2.0=py38h91455d4_4

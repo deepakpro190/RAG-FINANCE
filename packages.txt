@@ -1,4 +1,6 @@
-libffi-dev
+sqlite3
+libsqlite3-dev
+
 liblzma-dev
 libsqlite3-dev
 zlib1g-dev

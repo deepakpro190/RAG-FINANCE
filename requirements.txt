@@ -19,8 +19,8 @@ scipy
 scikit-learn
 sqlite3>=3.35.0
 tqdm
-langchain
-langchain-community
+langchain==0.3.20
+langchain-community==0.3.19
 openai
 transformers
 torch

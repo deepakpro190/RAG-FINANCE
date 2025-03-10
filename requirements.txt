@@ -12,3 +12,4 @@ chromadb
 scikit-learn
 pysqlite3-binary>=0.5.1 
 
+python-3.9

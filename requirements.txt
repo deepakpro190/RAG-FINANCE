@@ -186,6 +186,7 @@ sqlalchemy==2.0.38
 stack-data==0.6.3
 starlette==0.46.1
 streamlit==1.43.1
+sqlite==3.35.0
 sympy==1.13.1
 tenacity==9.0.0
 terminado==0.18.1

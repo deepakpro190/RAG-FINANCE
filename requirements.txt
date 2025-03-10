@@ -19,6 +19,7 @@ scipy
 scikit-learn
 tqdm
 langchain
+langchain-community
 openai
 transformers
 torch

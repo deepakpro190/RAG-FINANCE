@@ -14,3 +14,4 @@ jupyterlab==4.3.5
 langchain
 langchain-community
 sentence-transformers==3.4.1
+chromadb==0.6.3

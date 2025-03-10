@@ -1,0 +1,341 @@
+'''import streamlit as st
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain.vectorstores import Chroma
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+import torch
+import requests
+
+# --- Import API Keys and Config ---
+from config import (
+    NEWS_API_KEY,
+    REDDIT_CLIENT_ID,
+    REDDIT_CLIENT_SECRET,
+    REDDIT_USER_AGENT,
+    StockAPIClient,
+    SEC_BASE_URL,
+)
+
+# --- Function Definitions ---
+
+# Reddit API Function
+def fetch_reddit_posts(query, limit=10):
+    url = f"https://www.reddit.com/search.json?q={query}&limit={limit}"
+    headers = {"User-Agent": REDDIT_USER_AGENT}
+    auth = (REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+    response = requests.get(url, headers=headers, auth=auth)
+    if response.status_code == 200:
+        data = response.json()
+        posts = [
+            f"Title: {item['data']['title']}\nContent: {item['data']['selftext']}" 
+            for item in data.get("data", {}).get("children", [])
+        ]
+        return posts
+    else:
+        return [f"Error fetching Reddit data: {response.status_code}"]
+
+# Stock API Function
+def fetch_stock_data(symbol):
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={StockAPIClient}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json().get("Global Quote", {})
+        if data:
+            return f"Stock: {data.get('01. symbol', '')}, Price: {data.get('05. price', 'N/A')}"
+        else:
+            return "No stock data found."
+    else:
+        return f"Error fetching stock data: {response.status_code}"
+
+# SEC API Function
+def fetch_sec_filings(company, limit=5):
+    url = f"{SEC_BASE_URL}/company/{company}/filings?limit={limit}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        filings = response.json()
+        return [f"Filing: {filing['title']} Date: {filing['date']}" for filing in filings]
+    else:
+        return [f"Error fetching SEC data: {response.status_code}"]
+
+# News API Function
+def fetch_news_articles(query, limit=5):
+    url = f"https://newsapi.org/v2/everything?q={query}&pageSize={limit}&apiKey={NEWS_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        articles = response.json().get("articles", [])
+        return [f"Title: {article['title']} Source: {article['source']['name']}" for article in articles]
+    else:
+        return [f"Error fetching news data: {response.status_code}"]
+
+# Initialize ChromaDB and Embeddings
+@st.cache_resource
+def load_chroma_and_embeddings(persist_directory="chroma_store", model_name="sentence-transformers/all-MiniLM-L6-v2"):
+    embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"})
+    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    return vectorstore
+
+# Load the LLM
+@st.cache_resource
+def load_llm(model_name="meta-llama/Llama-3.2-1B-Instruct"):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+    )
+    return tokenizer, model
+
+# Summarizer Function
+def summarize_text(text, max_length=500):
+    summarizer = pipeline("summarization", model="facebook/bart-large-cnn", device=0 if torch.cuda.is_available() else -1)
+    summarized = summarizer(text, max_length=max_length, min_length=50, do_sample=False)
+    return summarized[0]['summary_text']
+
+# Truncate Function for Context
+def truncate_text(text, max_length=1024):
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-1B-Instruct")
+    tokens = tokenizer(text, return_tensors="pt", truncation=True, max_length=max_length)
+    return tokenizer.decode(tokens['input_ids'][0], skip_special_tokens=True)
+
+# Generate Answer using LLM
+def generate_answer_with_llm(query, context, tokenizer, model, max_length=50123):
+    prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
+        padding=True
+    ).to(model.device)
+
+    input_ids = inputs["input_ids"]
+    attention_mask = inputs["attention_mask"]
+
+    with torch.no_grad():
+        outputs = model.generate(
+            input_ids,
+            attention_mask=attention_mask,
+            max_length=max_length,
+            num_beams=3,
+            early_stopping=True
+        )
+
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# --- Streamlit UI ---
+
+st.title("Finance-Focused Q&A")
+
+# Load Models and Embeddings
+vectorstore = load_chroma_and_embeddings()
+tokenizer, model = load_llm()
+
+# Query Input
+query = st.text_input("Enter your finance-related query:")
+
+# Submit Button
+if st.button("Get Answer"):
+    if query:
+        with st.spinner("Processing..."):
+            # Fetch data from all APIs
+            reddit_data = fetch_reddit_posts(query)
+            news_data = fetch_news_articles(query)
+            sec_data = fetch_sec_filings(query, limit=3)  # Assume query is a company name
+            stock_data = fetch_stock_data(query)  # Assume query is a stock symbol
+            
+            # Combine all data into a single context
+            context = "\n".join(reddit_data[:5] + news_data[:5] + sec_data[:3])
+            context += f"\nStock Data: {stock_data}"
+
+            # Truncate or summarize the context
+            if len(context.split()) > 500:  # If context is long, summarize
+                context = summarize_text(context)
+            else:  # Otherwise, truncate if needed
+                context = truncate_text(context)
+
+            # Generate answer from LLM
+            answer = generate_answer_with_llm(query, context, tokenizer, model)
+
+        # Display the final answer only
+        st.write(answer)
+    else:
+        st.warning("Please enter a query to proceed.")
+'''
+
+
+
+
+
+
+
+'''
+import streamlit as st
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain.vectorstores import Chroma
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+import requests
+import itertools
+
+# --- Import API Keys and Config ---
+from config import (
+    NEWS_API_KEY,
+    REDDIT_CLIENT_ID,
+    REDDIT_CLIENT_SECRET,
+    REDDIT_USER_AGENT,
+    StockAPIClient,
+    SEC_BASE_URL,
+)
+
+# --- Function Definitions ---
+
+# Reddit API Function
+def fetch_reddit_posts(query, limit=10):
+    url = f"https://www.reddit.com/search.json?q={query}&limit={limit}"
+    headers = {"User-Agent": REDDIT_USER_AGENT}
+    auth = (REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET)
+    response = requests.get(url, headers=headers, auth=auth)
+    if response.status_code == 200:
+        data = response.json()
+        posts = [
+            f"Title: {item['data']['title']}\nContent: {item['data']['selftext']}" 
+            for item in data.get("data", {}).get("children", [])
+        ]
+        return posts
+    else:
+        return [f"Error fetching Reddit data: {response.status_code}"]
+
+# Stock API Function
+def fetch_stock_data(symbol):
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={StockAPIClient}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json().get("Global Quote", {})
+        if data:
+            return f"Stock: {data.get('01. symbol', '')}, Price: {data.get('05. price', 'N/A')}"
+        else:
+            return "No stock data found."
+    else:
+        return f"Error fetching stock data: {response.status_code}"
+
+# SEC API Function
+def fetch_sec_filings(company, limit=5):
+    url = f"{SEC_BASE_URL}/company/{company}/filings?limit={limit}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        filings = response.json()
+        return [f"Filing: {filing['title']} Date: {filing['date']}" for filing in filings]
+    else:
+        return [f"Error fetching SEC data: {response.status_code}"]
+
+# News API Function
+def fetch_news_articles(query, limit=5):
+    url = f"https://newsapi.org/v2/everything?q={query}&pageSize={limit}&apiKey={NEWS_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        articles = response.json().get("articles", [])
+        return [f"Title: {article['title']} Source: {article['source']['name']}" for article in articles]
+    else:
+        return [f"Error fetching news data: {response.status_code}"]
+
+# Initialize ChromaDB and Embeddings
+@st.cache_resource
+def load_chroma_and_embeddings(persist_directory="chroma_store", model_name="sentence-transformers/all-MiniLM-L6-v2"):
+    embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"})
+    vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+    return vectorstore
+
+# Load the LLM
+@st.cache_resource
+def load_llm(model_name="meta-llama/Llama-3.2-1B-Instruct"):
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
+    )
+    return tokenizer, model
+
+# Generate Answer using LLM
+def generate_answer_with_llm(query, context, tokenizer, model, max_length=122171):
+    prompt = f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        truncation=True,
+        padding=True
+    ).to(model.device)
+
+    input_ids = inputs["input_ids"]
+    attention_mask = inputs["attention_mask"]
+
+    with torch.no_grad():
+        outputs = model.generate(
+            input_ids,
+            attention_mask=attention_mask,
+            max_length=max_length,
+            num_beams=3,
+            early_stopping=True
+        )
+
+    return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# --- Streamlit UI ---
+
+st.title("Finance-Focused Q&A")
+
+# Load Models and Embeddings
+vectorstore = load_chroma_and_embeddings()
+tokenizer, model = load_llm()
+
+# Query Input
+query = st.text_input("Enter your finance-related query:")
+
+# Function to fetch and store embeddings for data
+def fetch_and_store_embeddings(query):
+    # Fetch data from APIs
+    reddit_data = fetch_reddit_posts(query)
+    news_data = fetch_news_articles(query)
+    sec_data = fetch_sec_filings(query, limit=3)
+    stock_data = fetch_stock_data(query)
+
+    # Combine all data into a single list of documents
+    all_data = reddit_data + news_data + sec_data + [stock_data]
+
+    # Ensure all elements are strings
+    all_data = [str(doc) for doc in all_data]
+
+    # Flatten the list if nested (e.g., list of lists)
+    all_data = list(itertools.chain.from_iterable(all_data))
+
+    # Generate embeddings for all data
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    vectorstore = load_chroma_and_embeddings()
+    
+    for doc in all_data:
+        vectorstore.add_texts([doc])  # Store embeddings in Chroma vector store
+
+# Submit Button
+if st.button("Get Answer"):
+    if query:
+        with st.spinner("Processing..."):
+            # Fetch and store embeddings if not already stored
+            fetch_and_store_embeddings(query)
+
+            # Generate embedding for the query
+            #query_embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2").embed_query(query)
+            query_embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2").embed_documents([query])[0]
+
+
+            # Search for most relevant data using Chroma
+            search_results = vectorstore.similarity_search(query_embedding, k=5)  # Fetch top 5 similar results
+            
+            # Combine the relevant data (top 5) as context
+            context = "\n".join([result['text'] for result in search_results])
+
+            # Generate answer from LLM
+            answer = generate_answer_with_llm(query, context, tokenizer, model)
+
+        # Display the final answer
+        st.write(answer)
+    else:
+        st.warning("Please enter a query to proceed.")
+'''

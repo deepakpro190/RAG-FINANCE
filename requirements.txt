@@ -10,3 +10,4 @@ faiss-cpu
 sentence-transformers
 chromadb
 scikit-learn
+pysqlite3-binary>=0.5.1 

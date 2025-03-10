@@ -57,9 +57,11 @@ def fetch_news_articles(query, limit=5):
         st.error(f"Error fetching news data: {e}")
         return []
 
+
 # @st.cache_resource removed to ensure no issues with resources
-def load_chroma_and_embeddings(persist_directory="chroma_store", model_name="sentence-transformers/all-MiniLM-L6-v2"):
+def load_chroma_and_embeddings(persist_directory=None, model_name="sentence-transformers/all-MiniLM-L6-v2"):
     embeddings = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"})
+    # Use in-memory Chroma (no persistence)
     vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
     return vectorstore, embeddings
 
@@ -145,7 +147,7 @@ with st.container():
     
     with col2:
         st.header("Current Chat")
-        vectorstore, embeddings = load_chroma_and_embeddings()
+        vectorstore, embeddings = load_chroma_and_embeddings()  # In-memory vector store
         tokenizer, model = load_llm()
         query = st.text_area("Enter your finance-related query:", height=200)
         

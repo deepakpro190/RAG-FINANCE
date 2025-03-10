@@ -109,7 +109,7 @@ dependencies:
   - pygments=2.18.0=pyhd8ed1ab_0
   - pysocks=1.7.1=pyh0701188_6
   - python=3.9
-  - python=3.8.20=hfaddaf0_2_cpython
+  
   - python-dateutil=2.9.0=pyhd8ed1ab_0
   - python-fastjsonschema=2.20.0=pyhd8ed1ab_0
   - python-json-logger=2.0.7=pyhd8ed1ab_0

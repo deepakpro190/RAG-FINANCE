@@ -13,3 +13,4 @@ streamlit==1.43.1
 jupyterlab==4.3.5
 langchain
 langchain-community
+sentence-transformers==3.4.1

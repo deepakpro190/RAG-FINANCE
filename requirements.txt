@@ -11,4 +11,4 @@ sentence-transformers
 chromadb
 scikit-learn
 pysqlite3-binary>=0.5.1 
-sqlite>=3.35.0
+

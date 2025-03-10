@@ -1,0 +1,11 @@
+libffi-dev
+liblzma-dev
+libsqlite3-dev
+libzlib-dev
+openssl
+bzip2
+ca-certificates
+tk
+ucrt
+vc
+vc14-runtime
